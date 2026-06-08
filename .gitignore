@@ -1,0 +1,19 @@
+# Binaries
+bin/
+
+# Tooling
+tools/
+
+# Dependencies
+vendor/
+
+# OS generated files
+.DS_Store
+
+# IDEs
+.idea/
+.vscode/
+
+# Local env
+.env
+*.local

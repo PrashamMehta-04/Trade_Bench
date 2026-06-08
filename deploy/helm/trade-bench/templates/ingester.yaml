@@ -1,0 +1,31 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "trade-bench.fullname" . }}-ingester
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: ingester
+  template:
+    metadata:
+      labels:
+        app: ingester
+    spec:
+      containers:
+        - name: ingester
+          image: {{ .Values.ingester.image }}
+          ports:
+            - containerPort: 8081
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "trade-bench.fullname" . }}-ingester
+spec:
+  type: {{ .Values.ingester.service.type }}
+  ports:
+    - port: {{ .Values.ingester.service.port }}
+      targetPort: 8081
+  selector:
+    app: ingester

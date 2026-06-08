@@ -1,0 +1,16 @@
+replicaCount: 1
+
+orchestrator:
+  image: trade-bench-orchestrator:latest
+  service:
+    type: ClusterIP
+    port: 8080
+
+ingester:
+  image: trade-bench-ingester:latest
+  service:
+    type: ClusterIP
+    port: 8081
+
+loadGenerator:
+  image: trade-bench-load-generator:latest

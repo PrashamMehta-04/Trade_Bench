@@ -1,0 +1,35 @@
+syntax = "proto3";
+
+package orchestrator;
+
+option go_package = "github.com/trade-bench/api/proto/orchestrator";
+
+service OrchestratorService {
+  // SubmitCode starts the benchmarking process for a given submission.
+  rpc SubmitCode(SubmissionRequest) returns (SubmissionResponse);
+
+  // GetBenchmarkStatus returns the current state of a benchmarking run.
+  rpc GetBenchmarkStatus(StatusRequest) returns (StatusResponse);
+}
+
+message SubmissionRequest {
+  string user_id = 1;
+  string submission_name = 2;
+  string repository_url = 3; // Or a blob storage URL for the binary/source
+  map<string, string> config = 4; // e.g., bot_count, duration
+}
+
+message SubmissionResponse {
+  string submission_id = 1;
+  string status = 2;
+}
+
+message StatusRequest {
+  string submission_id = 1;
+}
+
+message StatusResponse {
+  string submission_id = 1;
+  string state = 2; // PENDING, RUNNING, COMPLETED, FAILED
+  double current_score = 3;
+}

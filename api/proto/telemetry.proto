@@ -1,0 +1,35 @@
+syntax = "proto3";
+
+package telemetry;
+
+option go_package = "github.com/trade-bench/api/proto/telemetry";
+
+import "google/protobuf/timestamp.proto";
+
+service TelemetryService {
+  // ReportMetric is called by the Load Generator to send a single telemetry event.
+  rpc ReportMetric(MetricEvent) returns (ReportResponse);
+
+  // StreamMetrics allows for high-throughput streaming of metrics.
+  rpc StreamMetrics(stream MetricEvent) returns (ReportResponse);
+}
+
+message MetricEvent {
+  string submission_id = 1;
+  string bot_id = 2;
+  MetricType type = 3;
+  double value = 4; // latency in ms, or throughput value
+  google.protobuf.Timestamp timestamp = 5;
+  bool success = 6;
+  string error_message = 7;
+}
+
+enum MetricType {
+  LATENCY = 0;
+  THROUGHPUT = 1;
+  CORRECTNESS = 2;
+}
+
+message ReportResponse {
+  bool accepted = 1;
+}
