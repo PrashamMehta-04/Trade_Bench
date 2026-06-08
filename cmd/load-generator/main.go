@@ -34,16 +34,42 @@ func (b *Bot) Run(ctx context.Context, metricsChan chan<- telemetry.MetricEvent)
 		case <-ticker.C:
 			// Simulate an order entry
 			start := time.Now()
+			orderID := uuid.New().String()
+			side := telemetry.Buy
+			if rand.Intn(2) == 0 {
+				side = telemetry.Sell
+			}
+			price := 100.0 + rand.Float64()*10
+			qty := 1.0 + float64(rand.Intn(10))
+
+			// 1. Report the order we are about to send
+			metricsChan <- telemetry.MetricEvent{
+				SubmissionID: b.SubmissionID,
+				BotID:        b.ID,
+				Type:         telemetry.Correctness,
+				Timestamp:    time.Now(),
+				OrderData: &telemetry.OrderEvent{
+					OrderID:    orderID,
+					Side:       side,
+					Price:      price,
+					Quantity:   qty,
+					IsResolved: false,
+				},
+			}
 			
-			// In a real implementation, this would be a REST/WS/gRPC call to the contestant's system.
-			success := rand.Float32() > 0.1
-			latency := float64(time.Since(start).Milliseconds()) + float64(rand.Intn(10)) 
+			// Simulate a small delay for network/processing
+			time.Sleep(time.Duration(rand.Intn(5)) * time.Millisecond)
+
+			// 2. Simulate the contestant's response
+			success := rand.Float32() > 0.05 // 95% success rate for simulation
+			latency := float64(time.Since(start).Milliseconds())
 			
 			var errMsg string
 			if !success {
 				errMsg = "simulated order rejection"
 			}
 
+			// Report latency
 			metricsChan <- telemetry.MetricEvent{
 				SubmissionID: b.SubmissionID,
 				BotID:        b.ID,
@@ -52,6 +78,21 @@ func (b *Bot) Run(ctx context.Context, metricsChan chan<- telemetry.MetricEvent)
 				Timestamp:    time.Now(),
 				Success:      success,
 				ErrorMessage: errMsg,
+			}
+			
+			// Report the resolution (for correctness validation)
+			metricsChan <- telemetry.MetricEvent{
+				SubmissionID: b.SubmissionID,
+				BotID:        b.ID,
+				Type:         telemetry.Correctness,
+				Timestamp:    time.Now(),
+				Success:      success,
+				OrderData: &telemetry.OrderEvent{
+					OrderID:    orderID,
+					IsResolved: true,
+					FillPrice:  price, // Simplified: assume fill at requested price
+					FillQty:    qty,
+				},
 			}
 			
 			metricsChan <- telemetry.MetricEvent{

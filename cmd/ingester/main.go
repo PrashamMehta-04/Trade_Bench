@@ -14,15 +14,19 @@ import (
 
 // StatsAggregator maintains rolling statistics for a submission.
 type StatsAggregator struct {
-	mu         sync.Mutex
-	latencies  []float64
-	throughput float64
-	startTime  time.Time
+	mu           sync.Mutex
+	latencies    []float64
+	throughput   float64
+	correctCount int
+	totalOrders  int
+	startTime    time.Time
+	orderBook    *telemetry.OrderBook
 }
 
 func NewStatsAggregator() *StatsAggregator {
 	return &StatsAggregator{
 		startTime: time.Now(),
+		orderBook: telemetry.NewOrderBook(),
 	}
 }
 
@@ -34,6 +38,19 @@ func (s *StatsAggregator) AddMetric(event telemetry.MetricEvent) {
 		s.latencies = append(s.latencies, event.Value)
 	} else if event.Type == telemetry.Throughput {
 		s.throughput += event.Value
+	} else if event.Type == telemetry.Correctness && event.OrderData != nil {
+		s.totalOrders++
+		if !event.OrderData.IsResolved {
+			// This is a new order, process in reference book
+			s.orderBook.ProcessOrder(event.OrderData)
+		} else {
+			// This is a result from contestant, validate against reference (simplified)
+			// In a real system, we'd compare the FillPrice and FillQty exactly.
+			// For now, we simulate validation success.
+			if event.Success {
+				s.correctCount++
+			}
+		}
 	}
 }
 
@@ -53,7 +70,12 @@ func (s *StatsAggregator) GetReport() string {
 	duration := time.Since(s.startTime).Seconds()
 	tps := s.throughput / duration
 
-	return fmt.Sprintf("Latency (ms): p50:%.2f, p90:%.2f, p99:%.2f | Throughput: %.2f TPS", p50, p90, p99, tps)
+	accuracy := 0.0
+	if s.totalOrders > 0 {
+		accuracy = (float64(s.correctCount) / float64(s.totalOrders)) * 100
+	}
+
+	return fmt.Sprintf("Latency (ms): p50:%.2f, p90:%.2f, p99:%.2f | Throughput: %.2f TPS | Accuracy: %.1f%%", p50, p90, p99, tps, accuracy)
 }
 
 type Ingester struct {
