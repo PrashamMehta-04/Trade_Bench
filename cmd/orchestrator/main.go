@@ -120,15 +120,24 @@ func (o *Orchestrator) runBenchmark(id, image string) {
 
 	if o.k8sManager != nil {
 		ctx := context.Background()
+		// 1. Deploy the contestant's submission
 		err := o.k8sManager.DeploySubmission(ctx, "default", id, image)
 		if err != nil {
-			log.Printf("K8s Deployment failed: %v", err)
-			// For prototype, we continue anyway
+			log.Printf("K8s Submission Deployment failed: %v", err)
+		}
+
+		// 2. Wait for submission to be ready (simplified for prototype)
+		time.Sleep(10 * time.Second)
+
+		// 3. Deploy the Load Generator Fleet
+		err = o.k8sManager.DeployLoadGenerator(ctx, "default", id, "nats://nats:4222", 100)
+		if err != nil {
+			log.Printf("K8s Load Generator Deployment failed: %v", err)
 		}
 	}
 
-	// In a real scenario, we'd wait for the container to be ready, then trigger the Load Generator.
-	time.Sleep(30 * time.Second) // Simulated benchmark duration
+	// Simulated benchmark duration
+	time.Sleep(60 * time.Second)
 
 	o.mu.Lock()
 	sub.State = Completed
@@ -149,6 +158,11 @@ func main() {
 	http.HandleFunc("/submit", orch.HandleSubmit)
 	http.HandleFunc("/status", orch.HandleStatus)
 
+	// Serve the static dashboard
+	fs := http.FileServer(http.Dir("tools/dashboard"))
+	http.Handle("/dashboard/", http.StripPrefix("/dashboard/", fs))
+
 	log.Printf("Orchestrator listening on :8080")
+	log.Printf("Dashboard available at http://localhost:8080/dashboard/")
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }

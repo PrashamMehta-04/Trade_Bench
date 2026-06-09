@@ -19,8 +19,15 @@ func NewOrderBook() *OrderBook {
 	}
 }
 
-// ProcessOrder adds an order and returns potential fills based on price-time priority.
-func (ob *OrderBook) ProcessOrder(order *OrderEvent) (fills []OrderEvent) {
+// FillEvent represents a specific fill for an order.
+type FillEvent struct {
+	OrderID string
+	Price   float64
+	Quantity     float64
+}
+
+// ProcessOrder adds an order and returns all fills generated (for both the incoming and matched orders).
+func (ob *OrderBook) ProcessOrder(order *OrderEvent) (fills []FillEvent) {
 	ob.mu.Lock()
 	defer ob.mu.Unlock()
 
@@ -30,12 +37,19 @@ func (ob *OrderBook) ProcessOrder(order *OrderEvent) (fills []OrderEvent) {
 			ask := ob.Asks[i]
 			if order.Price >= ask.Price {
 				qty := min(order.Quantity, ask.Quantity)
-				fills = append(fills, OrderEvent{
-					OrderID:   order.OrderID,
-					Side:      Buy,
-					FillPrice: ask.Price,
-					FillQty:   qty,
+				// Fill for the buyer (incoming)
+				fills = append(fills, FillEvent{
+					OrderID:  order.OrderID,
+					Price:    ask.Price,
+					Quantity: qty,
 				})
+				// Fill for the seller (existing)
+				fills = append(fills, FillEvent{
+					OrderID:  ask.OrderID,
+					Price:    ask.Price,
+					Quantity: qty,
+				})
+
 				order.Quantity -= qty
 				ask.Quantity -= qty
 				if ask.Quantity == 0 {
@@ -60,12 +74,19 @@ func (ob *OrderBook) ProcessOrder(order *OrderEvent) (fills []OrderEvent) {
 			bid := ob.Bids[i]
 			if order.Price <= bid.Price {
 				qty := min(order.Quantity, bid.Quantity)
-				fills = append(fills, OrderEvent{
-					OrderID:   order.OrderID,
-					Side:      Sell,
-					FillPrice: bid.Price,
-					FillQty:   qty,
+				// Fill for the seller (incoming)
+				fills = append(fills, FillEvent{
+					OrderID:  order.OrderID,
+					Price:    bid.Price,
+					Quantity: qty,
 				})
+				// Fill for the buyer (existing)
+				fills = append(fills, FillEvent{
+					OrderID:  bid.OrderID,
+					Price:    bid.Price,
+					Quantity: qty,
+				})
+
 				order.Quantity -= qty
 				bid.Quantity -= qty
 				if bid.Quantity == 0 {

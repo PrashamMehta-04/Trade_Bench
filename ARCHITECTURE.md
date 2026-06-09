@@ -22,19 +22,23 @@ The Trade_Bench platform is designed to evaluate contestant-submitted trading in
 ### 2.3 Telemetry & Validation Ingester
 *   **Role:** Captures every interaction between the Bot Fleet and the Contestant Submission.
 *   **Implementation:** A low-latency tracking system (`cmd/ingester`) that aggregates metrics before storage.
+*   **Validation Engine:** 
+    *   **Shadow Matching Engine:** Maintains a price-time priority reference orderbook (`pkg/telemetry/validation.go`) to verify contestant execution.
+    *   **Live Scoring:** Calculates real-time accuracy percentages alongside latency and throughput.
 *   **Metrics Tracked:**
     *   **Latency:** p50, p90, and p99 order acknowledgment times.
     *   **Throughput:** Transactions Per Second (TPS).
-    *   **Correctness:** Validates price-time priority and trade execution accuracy against a reference implementation.
+    *   **Correctness:** Validation of price-time priority and fill accuracy.
 
 ## 3. Data Flow & Communication
 
 1.  **Submission:** Contestant uploads source/binary -> **Orchestrator** containerizes and deploys it to a k8s sandbox.
 2.  **Orchestration:** **Orchestrator** triggers the **Load Generator** to start the benchmarking run.
 3.  **Load Generation:** **Bot Fleet** bombards the contestant's endpoint with orders.
-4.  **Telemetry Streaming:** Each bot sends interaction logs (latency, status) to the **Ingester** via gRPC or a high-performance message bus (e.g., NATS or Kafka).
-5.  **Aggregation & Storage:** **Ingester** computes rolling statistics and stores them in **Redis** (for live leaderboard) and **TimescaleDB** (for historical analysis).
-6.  **Leaderboard:** Frontend pulls live data from Redis for real-time ranking.
+4.  **Telemetry Streaming:** Each bot sends interaction logs (latency, status, order data) to the **Ingester** via **NATS** (subject: `telemetry.metrics`).
+5.  **Aggregation & Storage:** **Ingester** consumes from NATS, computes rolling statistics, and maintains the reference orderbook.
+6.  **Leaderboard:** **Ingester** broadcasts live metrics over **WebSockets** to the dashboard UI.
+
 
 ## 4. Technology Stack
 *   **Language:** Go (Golang) for its superior concurrency model and performance.

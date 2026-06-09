@@ -3,15 +3,16 @@ package k8s
 import (
 	"context"
 	"fmt"
+	"os"
 
 	appsv1 "k8s.io/api/apps/v1"
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
-	"os"
 )
 
 type Manager struct {
@@ -94,6 +95,41 @@ func (m *Manager) DeploySubmission(ctx context.Context, namespace, submissionID,
 	}
 
 	_, err := m.clientset.AppsV1().Deployments(namespace).Create(ctx, deployment, metav1.CreateOptions{})
+	return err
+}
+
+func (m *Manager) DeployLoadGenerator(ctx context.Context, namespace, submissionID, natsURL string, botCount int) error {
+	job := &batchv1.Job{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: fmt.Sprintf("load-gen-%s", submissionID),
+			Labels: map[string]string{
+				"app":           "trade-bench-load-generator",
+				"submission-id": submissionID,
+			},
+		},
+		Spec: batchv1.JobSpec{
+			Template: corev1.PodTemplateSpec{
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
+						{
+							Name:  "load-generator",
+							Image: "trade-bench-load-generator:latest", // Assumes image is available
+							Env: []corev1.EnvVar{
+								{Name: "SUBMISSION_ID", Value: submissionID},
+								{Name: "BOT_COUNT", Value: fmt.Sprintf("%d", botCount)},
+								{Name: "NATS_URL", Value: natsURL},
+								{Name: "TARGET_URL", Value: fmt.Sprintf("http://sub-%s:8080", submissionID)},
+								{Name: "DURATION", Value: "5m"},
+							},
+						},
+					},
+					RestartPolicy: corev1.RestartPolicyNever,
+				},
+			},
+		},
+	}
+
+	_, err := m.clientset.BatchV1().Jobs(namespace).Create(ctx, job, metav1.CreateOptions{})
 	return err
 }
 
