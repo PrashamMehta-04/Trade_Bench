@@ -1,0 +1,7 @@
+Orchestrator Service Starting...
+2026/06/09 13:27:59 Warning: Kubernetes manager failed to initialize: failed to get kubernetes config: stat /Users/prashammehta/.kube/config: no such file or directory (running in local mode)
+2026/06/09 13:27:59 Orchestrator listening on :8080
+2026/06/09 13:27:59 Dashboard available at http://localhost:8080/dashboard/
+2026/06/09 14:00:32 Received submission: test-engine (7aaf0105-cd19-47fb-a548-6185eb02ba1d)
+2026/06/09 14:00:32 Starting benchmark for 7aaf0105-cd19-47fb-a548-6185eb02ba1d...
+2026/06/09 14:01:32 Benchmark completed for 7aaf0105-cd19-47fb-a548-6185eb02ba1d

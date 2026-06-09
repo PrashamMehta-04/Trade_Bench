@@ -3,7 +3,7 @@ replicaCount: 1
 orchestrator:
   image: trade-bench-orchestrator:latest
   service:
-    type: ClusterIP
+    type: LoadBalancer
     port: 8080
 
 ingester:
@@ -14,3 +14,18 @@ ingester:
 
 loadGenerator:
   image: trade-bench-load-generator:latest
+
+redis:
+  image: redis:alpine
+  port: 6379
+
+nats:
+  image: nats:latest
+  port: 4222
+
+timescale:
+  image: timescale/timescaledb:latest-pg15
+  port: 5432
+  user: postgres
+  password: password
+  database: trade_bench

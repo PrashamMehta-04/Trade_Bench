@@ -1,0 +1,30 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nats
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nats
+  template:
+    metadata:
+      labels:
+        app: nats
+    spec:
+      containers:
+        - name: nats
+          image: {{ .Values.nats.image }}
+          ports:
+            - containerPort: {{ .Values.nats.port }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nats
+spec:
+  ports:
+    - port: 4222
+      targetPort: {{ .Values.nats.port }}
+  selector:
+    app: nats

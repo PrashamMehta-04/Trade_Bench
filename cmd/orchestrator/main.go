@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"os"
 	"sync"
 	"time"
 
@@ -34,13 +35,15 @@ type Orchestrator struct {
 	submissions map[string]*Submission
 	k8sManager  *k8s.Manager
 	ingesterURL string
+	natsURL     string
 }
 
-func NewOrchestrator(k8sMan *k8s.Manager, ingesterURL string) *Orchestrator {
+func NewOrchestrator(k8sMan *k8s.Manager, ingesterURL, natsURL string) *Orchestrator {
 	return &Orchestrator{
 		submissions: make(map[string]*Submission),
 		k8sManager:  k8sMan,
 		ingesterURL: ingesterURL,
+		natsURL:     natsURL,
 	}
 }
 
@@ -120,8 +123,15 @@ func (o *Orchestrator) runBenchmark(id, image string) {
 
 	if o.k8sManager != nil {
 		ctx := context.Background()
-		// 1. Deploy the contestant's submission
-		err := o.k8sManager.DeploySubmission(ctx, "default", id, image)
+		
+		// 1. Setup isolation
+		err := o.k8sManager.CreateNetworkPolicy(ctx, "default", id)
+		if err != nil {
+			log.Printf("Network Policy creation failed: %v", err)
+		}
+
+		// 2. Deploy the contestant's submission
+		err = o.k8sManager.DeploySubmission(ctx, "default", id, image)
 		if err != nil {
 			log.Printf("K8s Submission Deployment failed: %v", err)
 		}
@@ -130,7 +140,7 @@ func (o *Orchestrator) runBenchmark(id, image string) {
 		time.Sleep(10 * time.Second)
 
 		// 3. Deploy the Load Generator Fleet
-		err = o.k8sManager.DeployLoadGenerator(ctx, "default", id, "nats://nats:4222", 100)
+		err = o.k8sManager.DeployLoadGenerator(ctx, "default", id, o.natsURL, 100)
 		if err != nil {
 			log.Printf("K8s Load Generator Deployment failed: %v", err)
 		}
@@ -154,7 +164,16 @@ func main() {
 		log.Printf("Warning: Kubernetes manager failed to initialize: %v (running in local mode)", err)
 	}
 
-	orch := NewOrchestrator(k8sMan, "http://localhost:8081")
+	ingesterURL := os.Getenv("INGESTER_URL")
+	if ingesterURL == "" {
+		ingesterURL = "http://localhost:8081"
+	}
+	natsURL := os.Getenv("NATS_URL")
+	if natsURL == "" {
+		natsURL = "nats://localhost:4222"
+	}
+
+	orch := NewOrchestrator(k8sMan, ingesterURL, natsURL)
 	http.HandleFunc("/submit", orch.HandleSubmit)
 	http.HandleFunc("/status", orch.HandleStatus)
 

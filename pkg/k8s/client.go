@@ -8,8 +8,10 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
@@ -45,7 +47,56 @@ func NewManager() (*Manager, error) {
 	return &Manager{clientset: clientset}, nil
 }
 
+func (m *Manager) CreateNetworkPolicy(ctx context.Context, namespace, submissionID string) error {
+	policy := &networkingv1.NetworkPolicy{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: fmt.Sprintf("isolate-%s", submissionID),
+		},
+		Spec: networkingv1.NetworkPolicySpec{
+			PodSelector: metav1.LabelSelector{
+				MatchLabels: map[string]string{
+					"submission-id": submissionID,
+				},
+			},
+			PolicyTypes: []networkingv1.PolicyType{
+				networkingv1.PolicyTypeIngress,
+				networkingv1.PolicyTypeEgress,
+			},
+			Ingress: []networkingv1.NetworkPolicyIngressRule{
+				{
+					// Only allow traffic from the Load Generator
+					From: []networkingv1.NetworkPolicyPeer{
+						{
+							PodSelector: &metav1.LabelSelector{
+								MatchLabels: map[string]string{
+									"app": "trade-bench-load-generator",
+								},
+							},
+						},
+					},
+					Ports: []networkingv1.NetworkPolicyPort{
+						{
+							Protocol: protoPtr(corev1.ProtocolTCP),
+							Port:     &intstr.IntOrString{IntVal: 8080},
+						},
+					},
+				},
+			},
+			Egress: []networkingv1.NetworkPolicyEgressRule{
+				// Deny all egress by default (no rules means deny)
+			},
+		},
+	}
+
+	_, err := m.clientset.NetworkingV1().NetworkPolicies(namespace).Create(ctx, policy, metav1.CreateOptions{})
+	return err
+}
+
 func (m *Manager) DeploySubmission(ctx context.Context, namespace, submissionID, image string) error {
+	// For "Guaranteed" QoS class (needed for potential CPU pinning), Requests must equal Limits.
+	cpuLimit := resource.MustParse("1")
+	memLimit := resource.MustParse("1Gi")
+
 	deployment := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: fmt.Sprintf("sub-%s", submissionID),
@@ -74,17 +125,29 @@ func (m *Manager) DeploySubmission(ctx context.Context, namespace, submissionID,
 							Image: image,
 							Resources: corev1.ResourceRequirements{
 								Limits: corev1.ResourceList{
-									corev1.ResourceCPU:    resource.MustParse("500m"),
-									corev1.ResourceMemory: resource.MustParse("512Mi"),
+									corev1.ResourceCPU:    cpuLimit,
+									corev1.ResourceMemory: memLimit,
 								},
 								Requests: corev1.ResourceList{
-									corev1.ResourceCPU:    resource.MustParse("200m"),
-									corev1.ResourceMemory: resource.MustParse("256Mi"),
+									corev1.ResourceCPU:    cpuLimit,
+									corev1.ResourceMemory: memLimit,
 								},
 							},
 							Ports: []corev1.ContainerPort{
 								{
 									ContainerPort: 8080,
+								},
+							},
+							SecurityContext: &corev1.SecurityContext{
+								AllowPrivilegeEscalation: boolPtr(false),
+								ReadOnlyRootFilesystem:   boolPtr(true),
+								RunAsNonRoot:             boolPtr(true),
+								RunAsUser:                int64Ptr(1000),
+								Capabilities: &corev1.Capabilities{
+									Drop: []corev1.Capability{"ALL"},
+								},
+								SeccompProfile: &corev1.SeccompProfile{
+									Type: corev1.SeccompProfileTypeRuntimeDefault,
 								},
 							},
 						},
@@ -134,3 +197,6 @@ func (m *Manager) DeployLoadGenerator(ctx context.Context, namespace, submission
 }
 
 func int32Ptr(i int32) *int32 { return &i }
+func int64Ptr(i int64) *int64 { return &i }
+func boolPtr(b bool) *bool    { return &b }
+func protoPtr(p corev1.Protocol) *corev1.Protocol { return &p }

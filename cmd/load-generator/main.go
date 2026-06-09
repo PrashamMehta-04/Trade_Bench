@@ -9,6 +9,7 @@ import (
 	"math/rand"
 	"net/http"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -156,9 +157,17 @@ func main() {
 	fmt.Println("Load Generator (Bot Fleet) Starting...")
 
 	// Configuration via Environment Variables or Flags
-	submissionID := os.Getenv("SUBMISSION_ID")
-	if submissionID == "" {
-		submissionID = uuid.New().String()
+	submissionIDsStr := os.Getenv("SUBMISSION_IDS")
+	var submissionIDs []string
+	if submissionIDsStr != "" {
+		submissionIDs = strings.Split(submissionIDsStr, ",")
+	}
+	
+	if len(submissionIDs) == 0 {
+		// Generate 3 random ones by default if none provided
+		for i := 0; i < 3; i++ {
+			submissionIDs = append(submissionIDs, uuid.New().String())
+		}
 	}
 
 	botCountStr := os.Getenv("BOT_COUNT")
@@ -198,12 +207,13 @@ func main() {
 		go startReporter(ctx, metricsChan, natsURL)
 	}
 
-	// Start bots
+	// Start bots, distributed across submissions
 	for i := 0; i < botCount; i++ {
 		wg.Add(1)
+		subID := submissionIDs[i%len(submissionIDs)]
 		bot := &Bot{
 			ID:           fmt.Sprintf("bot-%d", i),
-			SubmissionID: submissionID,
+			SubmissionID: subID,
 			TargetURL:    targetURL,
 		}
 		go func() {
@@ -212,7 +222,10 @@ func main() {
 		}()
 	}
 
-	fmt.Printf("Spawned %d bots for submission %s targeting %s\n", botCount, submissionID, targetURL)
+	fmt.Printf("Spawned %d bots across %d submissions targeting %s\n", botCount, len(submissionIDs), targetURL)
+	for _, id := range submissionIDs {
+		fmt.Printf(" - Submission: %s\n", id)
+	}
 	wg.Wait()
 	close(metricsChan)
 	fmt.Println("Load Generator finished.")

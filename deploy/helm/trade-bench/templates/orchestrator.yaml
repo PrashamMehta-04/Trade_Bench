@@ -16,6 +16,11 @@ spec:
       containers:
         - name: orchestrator
           image: {{ .Values.orchestrator.image }}
+          env:
+            - name: INGESTER_URL
+              value: "http://trade-bench-ingester:8081"
+            - name: NATS_URL
+              value: "nats:4222"
           ports:
             - containerPort: 8080
 ---

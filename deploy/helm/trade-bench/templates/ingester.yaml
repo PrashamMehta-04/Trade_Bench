@@ -15,6 +15,13 @@ spec:
       containers:
         - name: ingester
           image: {{ .Values.ingester.image }}
+          env:
+            - name: REDIS_URL
+              value: "redis:6379"
+            - name: NATS_URL
+              value: "nats:4222"
+            - name: TIMESCALE_URL
+              value: "postgres://{{ .Values.timescale.user }}:{{ .Values.timescale.password }}@timescale:5432/{{ .Values.timescale.database }}"
           ports:
             - containerPort: 8081
 ---

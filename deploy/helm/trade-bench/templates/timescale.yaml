@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: timescale
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: timescale
+  template:
+    metadata:
+      labels:
+        app: timescale
+    spec:
+      containers:
+        - name: timescale
+          image: {{ .Values.timescale.image }}
+          env:
+            - name: POSTGRES_PASSWORD
+              value: {{ .Values.timescale.password }}
+            - name: POSTGRES_DB
+              value: {{ .Values.timescale.database }}
+          ports:
+            - containerPort: {{ .Values.timescale.port }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: timescale
+spec:
+  ports:
+    - port: 5432
+      targetPort: {{ .Values.timescale.port }}
+  selector:
+    app: timescale
