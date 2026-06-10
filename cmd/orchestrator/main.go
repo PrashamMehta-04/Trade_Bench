@@ -78,7 +78,8 @@ func (o *Orchestrator) HandleSubmit(w http.ResponseWriter, r *http.Request) {
 	// Start the benchmark process
 	go o.runBenchmark(sub.ID, image)
 
-	fmt.Fprintf(w, "Submission received: %s\n", sub.ID)
+	w.Header().Set("Content-Type", "application/json")
+	fmt.Fprintf(w, "{\"submission_id\": \"%s\", \"message\": \"Benchmark started successfully\", \"status\": \"PENDING\"}\n", sub.ID)
 }
 
 func (o *Orchestrator) HandleStatus(w http.ResponseWriter, r *http.Request) {
