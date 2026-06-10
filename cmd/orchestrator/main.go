@@ -2,16 +2,20 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
+	"math/rand"
 	"net/http"
 	"os"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/nats-io/nats.go"
 	"github.com/trade-bench/platform/pkg/k8s"
+	"github.com/trade-bench/platform/pkg/telemetry"
 )
 
 type SubmissionState string
@@ -145,16 +149,86 @@ func (o *Orchestrator) runBenchmark(id, image string) {
 		if err != nil {
 			log.Printf("K8s Load Generator Deployment failed: %v", err)
 		}
+		
+		// Real K8s run duration
+		time.Sleep(60 * time.Second)
+	} else {
+		// LOCAL SIMULATION MODE (for Demo purposes when K8s is not available)
+		log.Printf("[LOCAL MODE] Starting metric simulator for %s", id)
+		o.runLocalSimulation(id)
 	}
-
-	// Simulated benchmark duration
-	time.Sleep(60 * time.Second)
 
 	o.mu.Lock()
 	sub.State = Completed
 	o.mu.Unlock()
 
 	log.Printf("Benchmark completed for %s", id)
+}
+
+func (o *Orchestrator) runLocalSimulation(id string) {
+	nc, err := nats.Connect(o.natsURL)
+	if err != nil {
+		log.Printf("Failed to connect to NATS for simulation: %v", err)
+		return
+	}
+	defer nc.Close()
+
+	stop := time.After(60 * time.Second)
+	ticker := time.NewTicker(200 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-stop:
+			return
+		case <-ticker.C:
+			// Emit 5-10 random events per tick
+			count := 5 + rand.Intn(5)
+			for i := 0; i < count; i++ {
+				// Random Latency (0.1ms to 5ms)
+				lat := 0.1 + rand.Float64()*4.9
+				o.publishMetric(nc, id, telemetry.Latency, lat)
+				
+				// Random Throughput
+				o.publishMetric(nc, id, telemetry.Throughput, 1.0)
+				
+				// Random Correctness (95-100% accurate)
+				acc := 1.0
+				if rand.Float32() < 0.02 {
+					acc = 0.0 // 2% chance of error
+				}
+				o.publishMetric(nc, id, telemetry.Correctness, acc)
+			}
+		}
+	}
+}
+
+func (o *Orchestrator) publishMetric(nc *nats.Conn, subID string, mType telemetry.MetricType, value float64) {
+	event := telemetry.MetricEvent{
+		SubmissionID: subID,
+		BotID:        "sim-bot-1",
+		Type:         mType,
+		Value:        value,
+		Timestamp:    time.Now(),
+		Success:      true,
+	}
+	// For correctness, we need a "resolved" order for the scoring logic
+	if mType == telemetry.Correctness {
+		event.OrderData = &telemetry.OrderEvent{
+			OrderID:    uuid.New().String(),
+			IsResolved: true,
+			FillPrice:  100.0,
+			FillQty:    1.0,
+		}
+		if value == 1.0 {
+			event.Success = true
+		} else {
+			event.Success = false
+		}
+	}
+
+	data, _ := json.Marshal(event)
+	nc.Publish("telemetry.metrics", data)
 }
 
 func main() {
